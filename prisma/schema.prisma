@@ -1,0 +1,120 @@
+// Modelo de datos completo (Fase 1).
+// Migración a PostgreSQL: cambiar `provider` y `DATABASE_URL`; gracias a las interfaces
+// de repositorio, el resto del codebase no se entera.
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum TrackerType {
+  CHECK
+  SCALE
+  COUNTER
+}
+
+enum Polarity {
+  POSITIVE
+  NEGATIVE
+  UNKNOWN
+}
+
+model User {
+  id         String     @id @default(cuid())
+  name       String
+  createdAt  DateTime   @default(now())
+  days       DayEntry[]
+  trackers   Tracker[]
+  categories Category[]
+  tags       Tag[]
+}
+
+model DayEntry {
+  id             String         @id @default(cuid())
+  userId         String
+  date           String // YYYY-MM-DD
+  score          Float?
+  note           String?
+  predictedScore Float?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  user           User           @relation(fields: [userId], references: [id])
+  values         TrackerValue[]
+  tags           DayTag[]
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model Tracker {
+  id               String         @id @default(cuid())
+  userId           String
+  name             String
+  type             TrackerType
+  unit             String?
+  target           Float?
+  expectedPolarity Polarity       @default(UNKNOWN)
+  categoryId       String?
+  order            Int            @default(0)
+  createdAt        DateTime       @default(now())
+  archivedAt       DateTime?
+  user             User           @relation(fields: [userId], references: [id])
+  category         Category?      @relation(fields: [categoryId], references: [id])
+  values           TrackerValue[]
+
+  @@index([userId])
+  @@index([userId, archivedAt])
+}
+
+model TrackerValue {
+  id           String   @id @default(cuid())
+  dayEntryId   String
+  trackerId    String
+  boolValue    Boolean?
+  numericValue Float?
+  quality      Int?     // CHECK quality 1-5 (null if not rated or not CHECK)
+  createdAt    DateTime @default(now())
+  day          DayEntry @relation(fields: [dayEntryId], references: [id], onDelete: Cascade)
+  tracker      Tracker  @relation(fields: [trackerId], references: [id])
+
+  @@unique([dayEntryId, trackerId])
+  @@index([trackerId])
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  userId   String
+  name     String
+  color    String?
+  order    Int       @default(0)
+  user     User      @relation(fields: [userId], references: [id])
+  trackers Tracker[]
+
+  @@index([userId])
+}
+
+model Tag {
+  id     String   @id @default(cuid())
+  userId String
+  name   String
+  color  String?
+  user   User     @relation(fields: [userId], references: [id])
+  days   DayTag[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model DayTag {
+  dayEntryId String
+  tagId      String
+  day        DayEntry @relation(fields: [dayEntryId], references: [id], onDelete: Cascade)
+  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([dayEntryId, tagId])
+  @@index([tagId])
+}
