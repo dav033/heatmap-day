@@ -14,15 +14,21 @@ export interface DayEntryRepository {
   getScoresInRange(userId: string, range: DateRange): Promise<DayScore[]>;
 
   /**
+   * Todos los días del usuario (con valores y tagIds), ordenados por fecha.
+   * Pensado para export/backup; no usar en vistas paginadas.
+   */
+  listAll(userId: string): Promise<DayEntry[]>;
+
+  /**
    * Setea el puntaje manual del día (crea la fila DayEntry si no existe).
    * Pasar `score = null` borra el puntaje sin borrar la fila.
    */
-  upsertScore(userId: string, date: DateString, score: number | null): Promise<DayEntry>;
+  upsertScore(userId: string, date: DateString, score: number | null): Promise<void>;
 
   /**
    * Setea la nota libre del día.
    */
-  upsertNote(userId: string, date: DateString, note: string | null): Promise<DayEntry>;
+  upsertNote(userId: string, date: DateString, note: string | null): Promise<void>;
 
   /**
    * Guardado del puntaje predicho. La predicción se calcula en su feature aparte.

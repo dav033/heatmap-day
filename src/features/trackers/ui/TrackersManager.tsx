@@ -113,7 +113,7 @@ export function TrackersManager({
       {grouped.length === 0 && (
         <Paper variant="outlined" sx={{ p: 3 }}>
           <Typography color="text.secondary">
-            Todavía no tenés trackers. Empezá creando uno (ej. "Sueño" como escala 0–10).
+            Todavía no tenés trackers. Empezá creando uno (ej. «Sueño» como escala 0–10).
           </Typography>
         </Paper>
       )}
@@ -196,6 +196,7 @@ export function TrackersManager({
       <ArchivedTrackers trackers={archived} />
 
       <TrackerForm
+        key={`tracker-${dialog.editingTracker?.id ?? 'new'}-${dialog.trackerOpen}`}
         open={dialog.trackerOpen}
         onClose={() => setDialog(INITIAL_DIALOG)}
         categories={categories}
@@ -207,6 +208,7 @@ export function TrackersManager({
         }
       />
       <CategoryForm
+        key={`category-${dialog.editingCategory?.id ?? 'new'}-${dialog.categoryOpen}`}
         open={dialog.categoryOpen}
         onClose={() => setDialog(INITIAL_DIALOG)}
         category={dialog.editingCategory}

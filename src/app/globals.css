@@ -18,3 +18,30 @@
 html, body {
   height: 100%;
 }
+
+/* Entrada sutil del contenido al navegar entre rutas. */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.fade-up {
+  animation: fade-up 280ms ease-out both;
+}
+
+/* Accesibilidad: desactivar animaciones/transiciones si el usuario lo pide. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

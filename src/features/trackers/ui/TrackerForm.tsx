@@ -9,7 +9,7 @@ import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { useEffect, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 
 import type { Category, Polarity, Tracker, TrackerType } from '@/core/domain';
 
@@ -61,14 +61,13 @@ export function TrackerForm({
   tracker,
   hasValues,
 }: TrackerFormProps) {
-  const [state, setState] = useState<FormState>(EMPTY);
+  // El estado se inicializa desde props; el padre fuerza un remount con `key`
+  // cada vez que abre el diálogo, así no hace falta sincronizar con useEffect.
+  const [state, setState] = useState<FormState>(() =>
+    tracker ? trackerToState(tracker) : EMPTY,
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-
-  useEffect(() => {
-    setState(tracker ? trackerToState(tracker) : EMPTY);
-    setError(null);
-  }, [tracker, open]);
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setState((s) => ({ ...s, [key]: value }));

@@ -2,7 +2,7 @@
 
 import Tooltip from '@mui/material/Tooltip';
 import Link from 'next/link';
-import type { CSSProperties } from 'react';
+import { memo, type CSSProperties } from 'react';
 
 import { scoreToColor } from '@/core/lib/colorScale';
 
@@ -15,6 +15,11 @@ interface HeatmapCellProps {
   height?: number;
   isToday?: boolean;
   showScoreText?: boolean;
+  /**
+   * Tooltip nativo (atributo `title`) en lugar del de MUI. Para grillas densas
+   * (vista anual: ~370 celdas) evita montar cientos de componentes Tooltip.
+   */
+  denseTooltip?: boolean;
 }
 
 function pickTextColor(bg: string, hasScore: boolean): string {
@@ -28,7 +33,7 @@ function pickTextColor(bg: string, hasScore: boolean): string {
   return luminance > 0.55 ? '#0a0b10' : '#f4f4f6';
 }
 
-export function HeatmapCell({
+export const HeatmapCell = memo(function HeatmapCell({
   date,
   score,
   label,
@@ -36,6 +41,7 @@ export function HeatmapCell({
   height,
   isToday = false,
   showScoreText = false,
+  denseTooltip = false,
 }: HeatmapCellProps) {
   const bg = scoreToColor(score);
   const hasScore = score !== undefined && score !== null && !Number.isNaN(score);
@@ -56,17 +62,24 @@ export function HeatmapCell({
     transition: 'transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease',
   };
 
+  const link = (
+    <Link
+      href={`/day/${date}`}
+      prefetch={false}
+      aria-label={tooltip}
+      title={denseTooltip ? tooltip : undefined}
+      style={style}
+      className="flex items-center justify-center rounded-lg font-semibold no-underline hover:scale-[1.06] hover:opacity-95 hover:shadow-md active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7c9cff]"
+    >
+      {showScoreText && hasScore ? score!.toFixed(1) : (label ?? '')}
+    </Link>
+  );
+
+  if (denseTooltip) return link;
+
   return (
     <Tooltip title={tooltip} placement="top" arrow>
-      <Link
-        href={`/day/${date}`}
-        prefetch={false}
-        aria-label={tooltip}
-        style={style}
-        className="flex items-center justify-center rounded-lg font-semibold no-underline hover:scale-[1.06] hover:opacity-95 hover:shadow-md"
-      >
-        {showScoreText && hasScore ? score!.toFixed(1) : (label ?? '')}
-      </Link>
+      {link}
     </Tooltip>
   );
-}
+});

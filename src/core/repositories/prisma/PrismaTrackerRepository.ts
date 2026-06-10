@@ -154,4 +154,15 @@ export class PrismaTrackerRepository implements TrackerRepository {
     if (!owned) return 0;
     return this.db.trackerValue.count({ where: { trackerId } });
   }
+
+  async countValuesByTracker(userId: string): Promise<Record<string, number>> {
+    const rows = await this.db.trackerValue.groupBy({
+      by: ['trackerId'],
+      where: { tracker: { userId } },
+      _count: { _all: true },
+    });
+    const out: Record<string, number> = {};
+    for (const r of rows) out[r.trackerId] = r._count._all;
+    return out;
+  }
 }

@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   compareGroups,
   confidenceFor,
-  mean,
   movingAverage,
   pearson,
   trendSlope,

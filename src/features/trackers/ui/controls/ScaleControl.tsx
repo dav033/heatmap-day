@@ -6,7 +6,7 @@ import Slider from '@mui/material/Slider';
 import Stack from '@mui/material/Stack';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { useOptimistic, useTransition } from 'react';
+import { useOptimistic, useState, useTransition } from 'react';
 
 import type { Tracker } from '@/core/domain';
 
@@ -21,11 +21,15 @@ interface ScaleControlProps {
   initialValue: number | null;
 }
 
+const round1 = (v: number) => Math.round(v * 10) / 10;
+
 export function ScaleControl({ tracker, date, initialValue }: ScaleControlProps) {
   const [optimistic, setOptimistic] = useOptimistic<number | null, number | null>(
     initialValue,
     (_p, next) => next,
   );
+  // Valor en vivo durante el arrastre; se persiste una sola vez al soltar.
+  const [draft, setDraft] = useState<number | null>(null);
   const [pending, startTransition] = useTransition();
 
   const commit = (v: number | null) => {
@@ -36,32 +40,37 @@ export function ScaleControl({ tracker, date, initialValue }: ScaleControlProps)
       } else {
         await upsertTrackerValueAction({
           date,
-          value: { trackerId: tracker.id, kind: 'SCALE', value: Math.round(v * 10) / 10 },
+          value: { trackerId: tracker.id, kind: 'SCALE', value: v },
         });
       }
     });
   };
 
+  const shown = draft ?? optimistic;
+
   return (
     <Stack direction="row" spacing={2} sx={{ alignItems: 'center', minWidth: 280 }}>
       <Typography variant="body1" sx={{ minWidth: 30 }}>
-        {optimistic === null ? '—' : optimistic.toFixed(1)}
+        {shown === null ? '—' : shown.toFixed(1)}
       </Typography>
       <Slider
-        value={optimistic ?? 0}
+        value={shown ?? 0}
         min={0}
         max={10}
         step={0.1}
         valueLabelDisplay="auto"
-        onChange={(_e, v) => commit(Math.round((Array.isArray(v) ? v[0]! : v) * 10) / 10)}
-        disabled={pending}
+        onChange={(_e, v) => setDraft(round1(Array.isArray(v) ? v[0]! : v))}
+        onChangeCommitted={(_e, v) => {
+          setDraft(null);
+          commit(round1(Array.isArray(v) ? v[0]! : v));
+        }}
         sx={{ flexGrow: 1 }}
       />
       <Tooltip title="Marcar como no registrado">
         <span>
           <IconButton
             size="small"
-            disabled={pending || optimistic === null}
+            disabled={pending || shown === null}
             onClick={() => commit(null)}
           >
             <ClearIcon fontSize="small" />

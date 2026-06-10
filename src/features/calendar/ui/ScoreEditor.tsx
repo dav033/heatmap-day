@@ -6,7 +6,14 @@ import Slider from '@mui/material/Slider';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { useOptimistic, useTransition, type ChangeEvent } from 'react';
+import {
+  useEffect,
+  useOptimistic,
+  useRef,
+  useState,
+  useTransition,
+  type ChangeEvent,
+} from 'react';
 
 import { scoreToColor } from '@/core/lib/colorScale';
 import { setDayScoreAction } from '@/features/calendar/api/actions';
@@ -18,12 +25,24 @@ interface ScoreEditorProps {
 
 const MARKS = [0, 2, 4, 6, 8, 10].map((v) => ({ value: v, label: `${v}` }));
 
+const round1 = (v: number) => Math.round(v * 10) / 10;
+
 export function ScoreEditor({ date, initialScore }: ScoreEditorProps) {
   const [optimisticScore, setOptimisticScore] = useOptimistic<number | null, number | null>(
     initialScore,
     (_prev, next) => next,
   );
+  // Valor en vivo mientras se arrastra el slider; el guardado ocurre una sola
+  // vez al soltar (onChangeCommitted), no en cada movimiento.
+  const [draft, setDraft] = useState<number | null>(null);
   const [pending, startTransition] = useTransition();
+  const inputTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (inputTimer.current) clearTimeout(inputTimer.current);
+    };
+  }, []);
 
   const commit = (value: number | null) => {
     startTransition(async () => {
@@ -32,21 +51,37 @@ export function ScoreEditor({ date, initialScore }: ScoreEditorProps) {
     });
   };
 
-  const onSlider = (_e: Event, value: number | number[]) => {
-    const v = Array.isArray(value) ? value[0]! : value;
-    commit(Math.round(v * 10) / 10);
+  const onSliderChange = (_e: Event, value: number | number[]) => {
+    setDraft(round1(Array.isArray(value) ? value[0]! : value));
+  };
+
+  const onSliderCommitted = (_e: unknown, value: number | number[]) => {
+    setDraft(null);
+    commit(round1(Array.isArray(value) ? value[0]! : value));
   };
 
   const onClear = () => commit(null);
 
   const onInput = (e: ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.trim();
-    if (raw === '') return onClear();
+    if (inputTimer.current) clearTimeout(inputTimer.current);
+    if (raw === '') {
+      setDraft(null);
+      return onClear();
+    }
     const n = Number(raw);
-    if (Number.isFinite(n) && n >= 0 && n <= 10) commit(Math.round(n * 10) / 10);
+    if (Number.isFinite(n) && n >= 0 && n <= 10) {
+      const v = round1(n);
+      setDraft(v);
+      inputTimer.current = setTimeout(() => {
+        setDraft(null);
+        commit(v);
+      }, 600);
+    }
   };
 
-  const color = optimisticScore !== null ? scoreToColor(optimisticScore) : '#a1a1aa';
+  const shown = draft ?? optimisticScore;
+  const color = shown !== null ? scoreToColor(shown) : '#a1a1aa';
 
   return (
     <Stack spacing={2.5}>
@@ -59,11 +94,11 @@ export function ScoreEditor({ date, initialScore }: ScoreEditorProps) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: optimisticScore !== null
+            background: shown !== null
               ? `radial-gradient(circle at 30% 30%, ${color}aa, ${color})`
               : 'rgba(255,255,255,0.04)',
             border: '1px solid rgba(255,255,255,0.08)',
-            boxShadow: optimisticScore !== null ? `0 6px 24px ${color}55` : 'none',
+            boxShadow: shown !== null ? `0 6px 24px ${color}55` : 'none',
             flexShrink: 0,
             transition: 'background 200ms ease, box-shadow 200ms ease',
           }}
@@ -73,22 +108,22 @@ export function ScoreEditor({ date, initialScore }: ScoreEditorProps) {
             sx={{
               fontSize: '2.4rem',
               fontWeight: 800,
-              color: optimisticScore !== null ? '#0a0b10' : 'text.secondary',
+              color: shown !== null ? '#0a0b10' : 'text.secondary',
             }}
           >
-            {optimisticScore === null ? '—' : optimisticScore.toFixed(1)}
+            {shown === null ? '—' : shown.toFixed(1)}
           </Typography>
         </Box>
         <Box sx={{ flexGrow: 1 }}>
           <Slider
-            value={optimisticScore ?? 0}
+            value={shown ?? 0}
             min={0}
             max={10}
             step={0.1}
             marks={MARKS}
             valueLabelDisplay="auto"
-            onChange={onSlider}
-            disabled={pending}
+            onChange={onSliderChange}
+            onChangeCommitted={onSliderCommitted}
             aria-label="Puntaje del día"
             sx={{
               '& .MuiSlider-thumb': { width: 18, height: 18 },
@@ -106,7 +141,7 @@ export function ScoreEditor({ date, initialScore }: ScoreEditorProps) {
           type="number"
           size="small"
           slotProps={{ htmlInput: { step: 0.1, min: 0, max: 10 } }}
-          value={optimisticScore ?? ''}
+          value={shown ?? ''}
           onChange={onInput}
           placeholder="0.0"
           aria-label="Puntaje numérico"
@@ -115,7 +150,7 @@ export function ScoreEditor({ date, initialScore }: ScoreEditorProps) {
         <Button
           variant="outlined"
           onClick={onClear}
-          disabled={pending || optimisticScore === null}
+          disabled={pending || shown === null}
           size="small"
         >
           Limpiar

@@ -8,13 +8,6 @@ const dn = (date: string, value: number): DatedNumber => ({ date, value });
 describe('meanByWeekday', () => {
   it('computes mean for each weekday', () => {
     // 2025-01-06 = Monday, 2025-01-07 = Tuesday, etc.
-    const series: DatedNumber[] = [
-      dn('2025-01-06', 7), // Mon
-      dn('2025-01-06', 9), // Mon (second week's Monday would be 2025-01-13)
-      // Actually let's use two Mondays
-      dn('2025-01-13', 5), // Mon
-    ];
-    // Wait, the date string must be unique per entry for this to make sense
     const series2: DatedNumber[] = [
       dn('2025-01-06', 7), // Monday
       dn('2025-01-07', 8), // Tuesday

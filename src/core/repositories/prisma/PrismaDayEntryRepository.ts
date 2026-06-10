@@ -6,23 +6,38 @@ import type { DayEntryRepository } from '@/core/repositories/interfaces';
 
 import { mapDayEntry } from './mappers';
 
+// Trae el tipo del tracker junto a cada valor: evita escanear la tabla de
+// trackers completa para resolver el discriminante de la unión TrackerValue.
+const DAY_INCLUDE = {
+  values: { include: { tracker: { select: { type: true } } } },
+  tags: true,
+} as const;
+
+function trackerTypeMap(
+  values: ReadonlyArray<{ trackerId: string; tracker: { type: string } }>,
+): Map<string, TrackerType> {
+  return new Map(values.map((v) => [v.trackerId, v.tracker.type as TrackerType]));
+}
+
 export class PrismaDayEntryRepository implements DayEntryRepository {
   constructor(private readonly db: PrismaClient) {}
 
   async getByDate(userId: string, date: DateString): Promise<DayEntry | null> {
     const row = await this.db.dayEntry.findUnique({
       where: { userId_date: { userId, date } },
-      include: { values: true, tags: true },
+      include: DAY_INCLUDE,
     });
     if (!row) return null;
-    const trackers = await this.db.tracker.findMany({
+    return mapDayEntry(row, trackerTypeMap(row.values));
+  }
+
+  async listAll(userId: string): Promise<DayEntry[]> {
+    const rows = await this.db.dayEntry.findMany({
       where: { userId },
-      select: { id: true, type: true },
+      include: DAY_INCLUDE,
+      orderBy: { date: 'asc' },
     });
-    const map = new Map<string, TrackerType>(
-      trackers.map((t) => [t.id, t.type as TrackerType]),
-    );
-    return mapDayEntry(row, map);
+    return rows.map((row) => mapDayEntry(row, trackerTypeMap(row.values)));
   }
 
   async getScoresInRange(userId: string, range: DateRange): Promise<DayScore[]> {
@@ -42,30 +57,24 @@ export class PrismaDayEntryRepository implements DayEntryRepository {
     userId: string,
     date: DateString,
     score: number | null,
-  ): Promise<DayEntry> {
+  ): Promise<void> {
     await this.db.dayEntry.upsert({
       where: { userId_date: { userId, date } },
       create: { userId, date, score: score ?? null },
       update: { score: score ?? null },
     });
-    const out = await this.getByDate(userId, date);
-    if (!out) throw new Error('DayEntry desapareció tras upsert');
-    return out;
   }
 
   async upsertNote(
     userId: string,
     date: DateString,
     note: string | null,
-  ): Promise<DayEntry> {
+  ): Promise<void> {
     await this.db.dayEntry.upsert({
       where: { userId_date: { userId, date } },
       create: { userId, date, note: note ?? null },
       update: { note: note ?? null },
     });
-    const out = await this.getByDate(userId, date);
-    if (!out) throw new Error('DayEntry desapareció tras upsert');
-    return out;
   }
 
   async setPredictedScore(

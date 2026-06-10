@@ -1,6 +1,9 @@
 export { StatsDashboard } from './StatsDashboard';
 export { TrackerTrendChart } from './TrackerTrendChart';
 export { TrackerImpactList } from './TrackerImpactList';
+export { TrackerInfluenceChart } from './TrackerInfluenceChart';
 export { CumulativeEffectList } from './CumulativeEffectList';
+export { DivergingBar } from './DivergingBar';
+export { LevelComparison } from './LevelComparison';
 export { PatternSummaryView } from './PatternSummaryView';
 export { StreakBadges } from './StreakBadges';

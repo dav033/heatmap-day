@@ -24,6 +24,24 @@ import { filterValuesByWindow } from '@/core/domain';
 
 // --- Public result types ---
 
+/**
+ * Comparación de niveles: el puntaje promedio del día cuando el tracker está
+ * "bajo" vs "alto" (CHECK: no hecho vs hecho; SCALE/COUNTER: bajo/alto según
+ * el target del tracker o la mediana de sus valores). Hace visible, por
+ * ejemplo, que "manga bajo" coincide con días malos.
+ */
+export interface ImpactLevels {
+  lowLabel: string;
+  highLabel: string;
+  /** Promedio del puntaje del día en cada grupo. */
+  lowMean: number;
+  highMean: number;
+  lowN: number;
+  highN: number;
+  /** Umbral usado para separar bajo/alto; null para CHECK. */
+  threshold: number | null;
+}
+
 export interface TrackerImpact {
   trackerId: string;
   trackerName: string;
@@ -36,6 +54,8 @@ export interface TrackerImpact {
   n: number;
   /** Average quality (1-5) for CHECK trackers when done; null if no quality data or not CHECK. */
   avgQuality: number | null;
+  /** Puntaje promedio del día según nivel del tracker; null si no hay muestra suficiente. */
+  levels: ImpactLevels | null;
 }
 
 export interface CumulativeEffect {
@@ -147,6 +167,18 @@ function impactForCheck(
     ? qualities.reduce((s, q) => s + q, 0) / qualities.length
     : null;
 
+  const levels: ImpactLevels | null = result
+    ? {
+        lowLabel: 'No hecho',
+        highLabel: 'Hecho',
+        lowMean: result.meanFalse,
+        highMean: result.meanTrue,
+        lowN: result.nFalse,
+        highN: result.nTrue,
+        threshold: null,
+      }
+    : null;
+
   return {
     trackerId: tracker.id,
     trackerName: tracker.name,
@@ -158,6 +190,7 @@ function impactForCheck(
     discoveredDirection: direction,
     n,
     avgQuality,
+    levels,
   };
 }
 
@@ -177,36 +210,33 @@ function impactForScaleOrCounter(
   }
 
   const corr = pearson(xs, ys);
+
+  // Comparación bajo/alto: separa los días por el target del tracker (si lo
+  // tiene) o por el umbral que mejor balancea los grupos, y compara el puntaje
+  // promedio de cada grupo. Esto hace explícito "cuando X está bajo, los días
+  // son malos". No usamos la mediana a ciegas: con valores empatados puede
+  // dejar un grupo casi vacío y perder el análisis.
   let delta: number | null = null;
-
-  if (tracker.target !== undefined && tracker.target !== null && xs.length >= 5) {
-    const above: number[] = [];
-    const below: number[] = [];
-    for (let i = 0; i < xs.length; i++) {
-      if (xs[i]! >= tracker.target) above.push(ys[i]!);
-      else below.push(ys[i]!);
-    }
-    if (above.length >= 5 && below.length >= 5) {
-      const ma = above.reduce((s, v) => s + v, 0) / above.length;
-      const mb = below.reduce((s, v) => s + v, 0) / below.length;
-      delta = ma - mb;
-    }
-  }
-
-  if (delta === null && xs.length >= 10) {
-    const med = median(xs);
-    if (med !== null) {
-      const above: number[] = [];
-      const below: number[] = [];
-      for (let i = 0; i < xs.length; i++) {
-        if (xs[i]! >= med) above.push(ys[i]!);
-        else below.push(ys[i]!);
-      }
-      if (above.length >= 5 && below.length >= 5) {
-        const ma = above.reduce((s, v) => s + v, 0) / above.length;
-        const mb = below.reduce((s, v) => s + v, 0) / below.length;
-        delta = ma - mb;
-      }
+  let levels: ImpactLevels | null = null;
+  const thresholds = [tracker.target ?? null, bestBalancedThreshold(xs)].filter(
+    (t): t is number => t !== null,
+  );
+  for (const threshold of thresholds) {
+    const pairs = xs.map((x, i) => ({ pred: x >= threshold, score: ys[i]! }));
+    const result = compareGroups(pairs, 5);
+    if (result) {
+      delta = result.delta;
+      const fmt = Number.isInteger(threshold) ? String(threshold) : threshold.toFixed(1);
+      levels = {
+        lowLabel: `Bajo (< ${fmt})`,
+        highLabel: `Alto (≥ ${fmt})`,
+        lowMean: result.meanFalse,
+        highMean: result.meanTrue,
+        lowN: result.nFalse,
+        highN: result.nTrue,
+        threshold,
+      };
+      break;
     }
   }
 
@@ -228,7 +258,37 @@ function impactForScaleOrCounter(
     discoveredDirection: direction,
     n: xs.length,
     avgQuality: null,
+    levels,
   };
+}
+
+/**
+ * Umbral (entre los valores observados) que reparte los días en grupos
+ * bajo/alto lo más parejos posible, usando `x >= t` como corte. Ante empate
+ * de balance, prefiere el corte más cercano a la mediana.
+ */
+function bestBalancedThreshold(xs: ReadonlyArray<number>): number | null {
+  if (xs.length < 2) return null;
+  const med = median(xs);
+  if (med === null) return null;
+
+  const candidates = [...new Set(xs)].sort((a, b) => a - b);
+  let best: { threshold: number; minGroup: number; distToMedian: number } | null = null;
+  // El menor valor como corte deja el grupo "bajo" vacío; se omite.
+  for (const threshold of candidates.slice(1)) {
+    const high = xs.filter((x) => x >= threshold).length;
+    const low = xs.length - high;
+    const minGroup = Math.min(low, high);
+    const distToMedian = Math.abs(threshold - med);
+    if (
+      !best ||
+      minGroup > best.minGroup ||
+      (minGroup === best.minGroup && distToMedian < best.distToMedian)
+    ) {
+      best = { threshold, minGroup, distToMedian };
+    }
+  }
+  return best?.threshold ?? null;
 }
 
 function computeTrackerImpact(

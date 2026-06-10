@@ -7,7 +7,7 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
-import { useEffect, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 
 import type { Category } from '@/core/domain';
 
@@ -19,15 +19,14 @@ interface CategoryFormProps {
   category?: Category | null;
 }
 
+/**
+ * El estado se inicializa desde props; el padre fuerza un remount con `key`
+ * cada vez que abre el diálogo, así no hace falta sincronizar con useEffect.
+ */
 export function CategoryForm({ open, onClose, category }: CategoryFormProps) {
-  const [name, setName] = useState('');
-  const [color, setColor] = useState('');
+  const [name, setName] = useState(category?.name ?? '');
+  const [color, setColor] = useState(category?.color ?? '');
   const [pending, startTransition] = useTransition();
-
-  useEffect(() => {
-    setName(category?.name ?? '');
-    setColor(category?.color ?? '');
-  }, [category, open]);
 
   const submit = () => {
     startTransition(async () => {

@@ -1,13 +1,15 @@
 'use client';
 
 import Box from '@mui/material/Box';
+import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Paper from '@mui/material/Paper';
+import Skeleton from '@mui/material/Skeleton';
 import Stack from '@mui/material/Stack';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { StatisticsResult } from '../application/statisticsService';
 import { getStatisticsAction } from '../api/statisticsActions';
@@ -17,6 +19,7 @@ import { KpiCards } from './KpiCards';
 import { PatternSummaryView } from './PatternSummaryView';
 import { StreakBadges } from './StreakBadges';
 import { TrackerImpactList } from './TrackerImpactList';
+import { TrackerInfluenceChart } from './TrackerInfluenceChart';
 import { TrackerTrendChart } from './TrackerTrendChart';
 
 type RangePreset = 'week' | 'month' | 'year' | 'all';
@@ -31,29 +34,33 @@ const PRESET_LABELS: Record<RangePreset, string> = {
 export function StatsDashboard() {
   const [preset, setPreset] = useState<RangePreset>('month');
   const [result, setResult] = useState<StatisticsResult | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  // Evita aplicar respuestas fuera de orden al cambiar de rango rápido.
+  const requestSeq = useRef(0);
 
+  // Solo setState asíncrono (tras el await): el indicador de carga lo prende
+  // el handler del toggle o el estado inicial, no el cuerpo del efecto.
   const load = useCallback(async (p: RangePreset) => {
-    setLoading(true);
+    const id = ++requestSeq.current;
     try {
       const data = await getStatisticsAction(p);
-      setResult(data);
+      if (requestSeq.current === id) setResult(data);
     } finally {
-      setLoading(false);
+      if (requestSeq.current === id) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    load(preset);
+    void load(preset);
   }, [preset, load]);
 
+  const changePreset = (p: RangePreset) => {
+    setLoading(true);
+    setPreset(p);
+  };
+
   if (loading && !result) {
-    return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 4 }}>
-        <CircularProgress size={20} />
-        <Typography color="text.secondary">Calculando estadísticas…</Typography>
-      </Box>
-    );
+    return <StatsSkeleton />;
   }
 
   if (!result) {
@@ -81,7 +88,7 @@ export function StatsDashboard() {
           size="small"
           value={preset}
           exclusive
-          onChange={(_, v) => v && setPreset(v as RangePreset)}
+          onChange={(_, v) => v && changePreset(v as RangePreset)}
         >
           {(Object.keys(PRESET_LABELS) as RangePreset[]).map((k) => (
             <ToggleButton key={k} value={k}>
@@ -125,8 +132,15 @@ export function StatsDashboard() {
       </SectionPaper>
 
       <SectionPaper
-        title="Impacto por factor"
-        subtitle="La dirección se descubre desde los datos (correlación / delta), no se asume."
+        title="Influencia de cada tracker"
+        subtitle="Barra verde hacia la derecha: buena influencia (sube el puntaje del día). Barra roja hacia la izquierda: mala influencia (lo baja). La dirección se descubre desde los datos (correlación / delta), no se asume."
+      >
+        <TrackerInfluenceChart impacts={result.trackerImpacts} />
+      </SectionPaper>
+
+      <SectionPaper
+        title="Detalle del impacto por factor"
+        subtitle="Mismos datos que arriba, con confianza, cantidad de días y calidad promedio."
       >
         <TrackerImpactList impacts={result.trackerImpacts} />
       </SectionPaper>
@@ -152,8 +166,30 @@ export function StatsDashboard() {
             : impact?.trackerType === 'SCALE'
               ? [0, 10]
               : undefined;
+        const showDirection =
+          impact &&
+          impact.confidence !== 'insufficient' &&
+          (impact.discoveredDirection === 'positive' || impact.discoveredDirection === 'negative');
         return (
-          <SectionPaper key={effect.trackerId} title={impact?.trackerName ?? effect.trackerName}>
+          <SectionPaper
+            key={effect.trackerId}
+            title={impact?.trackerName ?? effect.trackerName}
+            badge={
+              showDirection ? (
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  color={impact.discoveredDirection === 'positive' ? 'success' : 'error'}
+                  label={
+                    impact.discoveredDirection === 'positive'
+                      ? 'Buena influencia'
+                      : 'Mala influencia'
+                  }
+                  sx={{ height: 22 }}
+                />
+              ) : undefined
+            }
+          >
             <TrackerTrendChart
               title=""
               series={effect.rawSeries}
@@ -169,21 +205,46 @@ export function StatsDashboard() {
   );
 }
 
+function StatsSkeleton() {
+  return (
+    <Box>
+      <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
+        <Skeleton variant="rounded" width={280} height={36} />
+      </Stack>
+      <Stack direction="row" spacing={2} sx={{ mb: 3, flexWrap: 'wrap', rowGap: 2 }}>
+        {Array.from({ length: 4 }, (_, i) => (
+          <Skeleton key={i} variant="rounded" width={180} height={92} />
+        ))}
+      </Stack>
+      <Skeleton variant="rounded" height={280} sx={{ mb: 3 }} />
+      <Skeleton variant="rounded" height={200} sx={{ mb: 3 }} />
+      <Skeleton variant="rounded" height={200} />
+    </Box>
+  );
+}
+
 function SectionPaper({
   title,
   subtitle,
+  badge,
   children,
 }: {
   title: string;
   subtitle?: string;
+  badge?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, mb: 3 }}>
       {title && (
-        <Typography variant="h4" gutterBottom>
-          {title}
-        </Typography>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ alignItems: 'center', mb: 1, flexWrap: 'wrap' }}
+        >
+          <Typography variant="h4">{title}</Typography>
+          {badge}
+        </Stack>
       )}
       {subtitle && (
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>

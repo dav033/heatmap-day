@@ -11,6 +11,8 @@ import { alpha, useTheme } from '@mui/material/styles';
 import type { TrackerImpact } from '@/features/statistics/application/statisticsService';
 import type { Confidence } from '@/features/statistics/domain';
 
+import { LevelComparison } from './LevelComparison';
+
 const confidenceLabel = (c: Confidence) => {
   switch (c) {
     case 'insufficient':
@@ -141,6 +143,7 @@ function ImpactRow({ impact }: { impact: TrackerImpact }) {
               )}
             </Typography>
           )}
+          {impact.levels && <LevelComparison levels={impact.levels} />}
         </Box>
         <Box sx={{ width: 140, minWidth: 100 }}>
           <LinearProgress

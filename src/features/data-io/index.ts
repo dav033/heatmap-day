@@ -1,2 +1,2 @@
-// Superficie pública de la feature `data-io`. Se rellena en la Fase 7.
-export {};
+// Superficie pública de la feature `data-io`.
+export { buildExportBundle, type ExportBundle } from './application/exportService';

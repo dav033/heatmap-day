@@ -60,4 +60,10 @@ export interface TrackerRepository {
    * Cuántos valores tiene un tracker. Sirve para permitir/no `cambiar tipo`.
    */
   countValues(userId: string, trackerId: string): Promise<number>;
+
+  /**
+   * Conteo de valores para todos los trackers del usuario en una sola query.
+   * Trackers sin valores no aparecen en el mapa.
+   */
+  countValuesByTracker(userId: string): Promise<Record<string, number>>;
 }

@@ -7,7 +7,7 @@ import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { useOptimistic, useTransition, type ChangeEvent } from 'react';
+import { useEffect, useOptimistic, useRef, useState, useTransition, type ChangeEvent } from 'react';
 
 import type { Tracker } from '@/core/domain';
 
@@ -27,7 +27,17 @@ export function CounterControl({ tracker, date, initialValue }: CounterControlPr
     initialValue,
     (_p, next) => next,
   );
+  // Valor en vivo mientras se escribe; el guardado se debouncea para no
+  // disparar una server action por cada tecla.
+  const [draft, setDraft] = useState<number | null>(null);
   const [pending, startTransition] = useTransition();
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, []);
 
   const commit = (v: number | null) => {
     startTransition(async () => {
@@ -45,15 +55,25 @@ export function CounterControl({ tracker, date, initialValue }: CounterControlPr
 
   const onChange = (e: ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.trim();
-    if (raw === '') return commit(null);
+    if (timer.current) clearTimeout(timer.current);
+    if (raw === '') {
+      setDraft(null);
+      return commit(null);
+    }
     const n = Number(raw);
-    if (Number.isFinite(n)) commit(n);
+    if (!Number.isFinite(n)) return;
+    setDraft(n);
+    timer.current = setTimeout(() => {
+      setDraft(null);
+      commit(n);
+    }, 500);
   };
 
+  const shown = draft ?? optimistic;
   const target = tracker.target;
   const ratio =
-    target !== undefined && target > 0 && optimistic !== null
-      ? Math.min(100, Math.max(0, (optimistic / target) * 100))
+    target !== undefined && target > 0 && shown !== null
+      ? Math.min(100, Math.max(0, (shown / target) * 100))
       : null;
 
   return (
@@ -62,10 +82,9 @@ export function CounterControl({ tracker, date, initialValue }: CounterControlPr
         <TextField
           type="number"
           size="small"
-          value={optimistic ?? ''}
+          value={shown ?? ''}
           onChange={onChange}
           placeholder="—"
-          disabled={pending}
           sx={{ width: 110 }}
           slotProps={{ htmlInput: { step: 'any' } }}
         />
@@ -83,8 +102,12 @@ export function CounterControl({ tracker, date, initialValue }: CounterControlPr
           <span>
             <IconButton
               size="small"
-              disabled={pending || optimistic === null}
-              onClick={() => commit(null)}
+              disabled={pending || shown === null}
+              onClick={() => {
+                if (timer.current) clearTimeout(timer.current);
+                setDraft(null);
+                commit(null);
+              }}
             >
               <ClearIcon fontSize="small" />
             </IconButton>

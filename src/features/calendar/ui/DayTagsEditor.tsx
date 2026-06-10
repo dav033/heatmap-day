@@ -7,7 +7,7 @@ import IconButton from '@mui/material/IconButton';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { useState, useTransition } from 'react';
+import { useOptimistic, useState, useTransition } from 'react';
 
 import type { Tag } from '@/core/domain';
 
@@ -25,7 +25,18 @@ interface DayTagsEditorProps {
 
 export function DayTagsEditor({ date, allTags, attachedIds }: DayTagsEditorProps) {
   const [inputValue, setInputValue] = useState('');
-  const [optimisticIds, setOptimisticIds] = useState<string[]>(attachedIds);
+  // useOptimistic (no useState): al revalidar el server component, la lista
+  // vuelve a sincronizarse sola con `attachedIds`.
+  const [optimisticIds, applyIds] = useOptimistic<
+    string[],
+    { type: 'add' | 'remove'; tagId: string }
+  >(attachedIds, (ids, action) =>
+    action.type === 'add'
+      ? ids.includes(action.tagId)
+        ? ids
+        : [...ids, action.tagId]
+      : ids.filter((id) => id !== action.tagId),
+  );
   const [pending, startTransition] = useTransition();
 
   const tagsById = new Map(allTags.map((t) => [t.id, t]));
@@ -39,9 +50,9 @@ export function DayTagsEditor({ date, allTags, attachedIds }: DayTagsEditorProps
         const name = input.trim();
         if (!name) return;
         const { tagId } = await createOrAttachTagAction({ date, name });
-        setOptimisticIds((ids) => (ids.includes(tagId) ? ids : [...ids, tagId]));
+        applyIds({ type: 'add', tagId });
       } else {
-        setOptimisticIds((ids) => (ids.includes(input.id) ? ids : [...ids, input.id]));
+        applyIds({ type: 'add', tagId: input.id });
         await attachTagAction({ date, tagId: input.id });
       }
       setInputValue('');
@@ -50,7 +61,7 @@ export function DayTagsEditor({ date, allTags, attachedIds }: DayTagsEditorProps
 
   const removeTag = (tagId: string) => {
     startTransition(async () => {
-      setOptimisticIds((ids) => ids.filter((id) => id !== tagId));
+      applyIds({ type: 'remove', tagId });
       await detachTagAction({ date, tagId });
     });
   };

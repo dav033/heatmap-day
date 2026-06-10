@@ -4,23 +4,20 @@ import { getCurrentUserId } from '@/core/config/user';
 import { repos } from '@/core/repositories/prisma';
 import { categoryService, trackerService, TrackersManager } from '@/features/trackers';
 
+// Datos vivos de la DB: nunca prerenderizar en build.
+export const dynamic = 'force-dynamic';
+
 export default async function TrackersPage() {
   const userId = await getCurrentUserId();
-  const [active, archived, categories] = await Promise.all([
+  const [active, archived, categories, counts] = await Promise.all([
     trackerService.listTrackers({ includeArchived: false }),
     repos.trackers
       .list(userId, { includeArchived: true })
       .then((all) => all.filter((t) => t.archivedAt)),
     categoryService.listCategories(),
+    // Conteo de valores por tracker (para limitar el cambio de tipo en la edición).
+    repos.trackers.countValuesByTracker(userId),
   ]);
-
-  // Conteo de valores por tracker (para limitar el cambio de tipo en la edición).
-  const counts: Record<string, number> = {};
-  await Promise.all(
-    active.map(async (t) => {
-      counts[t.id] = await repos.trackers.countValues(userId, t.id);
-    }),
-  );
 
   return (
     <Box>

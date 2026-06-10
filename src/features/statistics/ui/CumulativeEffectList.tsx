@@ -1,13 +1,13 @@
 'use client';
 
 import Box from '@mui/material/Box';
-import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
-import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { alpha } from '@mui/material/styles';
 
 import type { CumulativeEffect } from '@/features/statistics/application/statisticsService';
+
+import { DivergingBar } from './DivergingBar';
 
 interface CumulativeEffectListProps {
   effects: CumulativeEffect[];
@@ -38,6 +38,49 @@ export function CumulativeEffectList({ effects }: CumulativeEffectListProps) {
   );
 }
 
+function MaCorrelationBar({
+  label,
+  correlation,
+  windowDays,
+}: {
+  label: string;
+  correlation: number | null;
+  windowDays: number;
+}) {
+  if (correlation === null) return null;
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: '44px 1fr 64px',
+        gap: 1,
+        alignItems: 'center',
+      }}
+    >
+      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+        {label}
+      </Typography>
+      <DivergingBar
+        value={correlation}
+        height={12}
+        tooltip={`Correlación de la media móvil de ${windowDays} días con el puntaje del día`}
+      />
+      <Typography
+        variant="caption"
+        sx={{
+          textAlign: 'right',
+          fontWeight: 600,
+          color:
+            correlation > 0.05 ? '#4ade80' : correlation < -0.05 ? '#f87171' : 'text.secondary',
+        }}
+      >
+        r {correlation > 0 ? '+' : ''}
+        {correlation.toFixed(2)}
+      </Typography>
+    </Box>
+  );
+}
+
 function EffectRow({ effect }: { effect: CumulativeEffect }) {
   const strongest = Math.abs(effect.maCorrelation7 ?? 0) > Math.abs(effect.maCorrelation3 ?? 0)
     ? effect.maCorrelation7
@@ -58,30 +101,12 @@ function EffectRow({ effect }: { effect: CumulativeEffect }) {
         backgroundColor: alpha(accent, 0.04),
       }}
     >
-      <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+      <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.75 }}>
         {effect.trackerName}
       </Typography>
-      <Stack direction="row" spacing={1} sx={{ mb: 0.5, flexWrap: 'wrap' }}>
-        {effect.maCorrelation3 !== null && (
-          <Tooltip title="Correlación de la media móvil de 3 días con el puntaje del día" arrow>
-            <Chip
-              label={`MA-3 r=${effect.maCorrelation3.toFixed(2)}`}
-              size="small"
-              variant="outlined"
-              sx={{ height: 22 }}
-            />
-          </Tooltip>
-        )}
-        {effect.maCorrelation7 !== null && (
-          <Tooltip title="Correlación de la media móvil de 7 días con el puntaje del día" arrow>
-            <Chip
-              label={`MA-7 r=${effect.maCorrelation7.toFixed(2)}`}
-              size="small"
-              variant="outlined"
-              sx={{ height: 22 }}
-            />
-          </Tooltip>
-        )}
+      <Stack spacing={0.5} sx={{ mb: 0.75 }}>
+        <MaCorrelationBar label="MA-3" correlation={effect.maCorrelation3} windowDays={3} />
+        <MaCorrelationBar label="MA-7" correlation={effect.maCorrelation7} windowDays={7} />
       </Stack>
       {effect.lowStreaks.length > 0 && (
         <Typography variant="caption" sx={{ display: 'block', color: 'error.light' }}>
